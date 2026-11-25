@@ -207,7 +207,7 @@ function PanZoomViewer({ src, alt, label }: { src: string; alt: string; label: s
           type="range"
           min={MIN_ZOOM * 100}
           max={MAX_ZOOM * 100}
-          step="10"
+          step="1"
           value={Math.round(zoom * 100)}
           onChange={(event) => changeZoom(Number(event.target.value) / 100)}
           aria-label="图片缩放比例"
