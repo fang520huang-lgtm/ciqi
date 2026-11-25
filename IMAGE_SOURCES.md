@@ -1,14 +1,15 @@
 # 图片来源与授权记录
 
-本项目的瓷器实物图均来自 The Metropolitan Museum of Art（The Met）Open Access 藏品数据库，原始记录标注为 **Public Domain**。文件为 The Met 提供的 `web-large` 版本；未裁去馆方拍摄背景或馆藏标签。
+本项目的瓷器实物图均来自 The Metropolitan Museum of Art（The Met）Open Access 藏品数据库，原始记录标注为 **Public Domain**。文件优先使用 The Met 提供的 `web-large` 版本；未裁去馆方拍摄背景或馆藏标签。馆方页面可见但未明确开放复用的图片不复制到本项目。
 
 ## 批量图鉴数据
 
 - `src/catalog.json` 由 The Met 官方 Open Access 全量数据集 `MetObjects.csv` 筛选生成。
 - 收录条件：`Is Public Domain = True`、`Department = Asian Art`、`Culture = China`、`Period` 为清代且明确包含 `mark and period`、`Medium` 包含 `Porcelain`。
-- 当前共 248 条：康熙 120、雍正 32、乾隆 54、嘉庆 17、道光 23、光绪 2。
+- 当前共 248 条元数据：康熙 120、雍正 32、乾隆 54、嘉庆 17、道光 23、光绪 2；其中 159 件已校验并下载开放主图。
 - `public/assets/images/catalog/met-{Object ID}.jpg` 与 The Met Object ID 一一对应；每条记录的原始馆藏链接保存在 `catalog.json`。
-- 更新脚本为 `scripts/build-catalog.ps1`，输入 The Met 官方 `MetObjects.csv` 后可重新生成图鉴数据并补充开放图片。
+- `public/assets/images/catalog/details/met-{Object ID}-{序号}.jpg` 为同一馆藏的开放附加视角。当前 51 件含附图；42 件经视觉确认含底款图，45 件含底款或胎底/足部图。
+- `scripts/build-catalog.ps1` 负责从官方 CSV 生成基础目录；`scripts/enrich-catalog.mjs` 断点补充开放图与馆藏字段；`scripts/curate-details.mjs` 写入已经人工确认的底款/胎底分类。
 
 The Met 官方开放数据仓库：https://github.com/metmuseum/openaccess
 
@@ -31,4 +32,6 @@ The Met Open Access 政策：https://www.metmuseum.org/about-the-met/policies-an
 
 - 页面中的年代、材质、尺寸与馆藏号以对应馆藏记录为准。
 - `detail`、`base` 文件为同一馆藏记录中的附加视角；底部旧标签、红色编号或馆藏贴纸不是原器款识。
+- 数据中的 `check-failed` 表示本次核对受到网络或馆方临时限流影响，不代表馆方无图；这类记录不会显示“无开放图”的错误结论。
+- 图片有馆方网页展示但没有明确开放许可时，网站只说明可查看的图片类型并给出馆方入口，不转载受限图片。
 - 如馆方日后修订定名或年代，以原始记录的最新内容为准。
