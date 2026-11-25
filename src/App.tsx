@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react"
-import { Database, ExternalLink, Images, Maximize2, Search, Stamp } from "lucide-react"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { Database, ExternalLink, Images, Maximize2, Minus, Plus, RotateCcw, Search, Stamp } from "lucide-react"
 import catalogData from "./catalog.json"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -95,6 +95,133 @@ function MuseumImage({ src, alt, className = "" }: { src: string; alt: string; c
   return <img src={assetUrl(src)} alt={alt} loading="lazy" className={`bg-white object-contain ${className}`} />
 }
 
+const MIN_ZOOM = 1
+const MAX_ZOOM = 8
+
+function PanZoomViewer({ src, alt, label }: { src: string; alt: string; label: string }) {
+  const [zoom, setZoom] = useState(MIN_ZOOM)
+  const [offset, setOffset] = useState({ x: 0, y: 0 })
+  const [dragging, setDragging] = useState(false)
+  const viewportRef = useRef<HTMLDivElement>(null)
+  const dragRef = useRef<{ pointerId: number; startX: number; startY: number; offsetX: number; offsetY: number } | null>(null)
+
+  const clampZoom = (value: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value))
+  const reset = () => {
+    setZoom(MIN_ZOOM)
+    setOffset({ x: 0, y: 0 })
+  }
+
+  const changeZoom = (value: number) => {
+    const next = clampZoom(value)
+    setZoom(next)
+    if (next === MIN_ZOOM) setOffset({ x: 0, y: 0 })
+  }
+
+  const handleWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    const next = clampZoom(zoom * (event.deltaY < 0 ? 1.18 : 1 / 1.18))
+    if (next === zoom) return
+
+    const rect = viewportRef.current?.getBoundingClientRect()
+    if (rect) {
+      const cursorX = event.clientX - rect.left - rect.width / 2
+      const cursorY = event.clientY - rect.top - rect.height / 2
+      const ratio = next / zoom
+      setOffset((current) => ({
+        x: cursorX - (cursorX - current.x) * ratio,
+        y: cursorY - (cursorY - current.y) * ratio,
+      }))
+    }
+    setZoom(next)
+  }
+
+  const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0 || zoom <= MIN_ZOOM) return
+    event.currentTarget.setPointerCapture(event.pointerId)
+    dragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      offsetX: offset.x,
+      offsetY: offset.y,
+    }
+    setDragging(true)
+  }
+
+  const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current
+    if (!drag || drag.pointerId !== event.pointerId) return
+    setOffset({
+      x: drag.offsetX + event.clientX - drag.startX,
+      y: drag.offsetY + event.clientY - drag.startY,
+    })
+  }
+
+  const endDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (dragRef.current?.pointerId !== event.pointerId) return
+    dragRef.current = null
+    setDragging(false)
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
+  }
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (["+", "=", "-", "0", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) event.preventDefault()
+    if (event.key === "+" || event.key === "=") changeZoom(zoom * 1.25)
+    if (event.key === "-") changeZoom(zoom / 1.25)
+    if (event.key === "0") reset()
+    if (event.key === "ArrowLeft") setOffset((current) => ({ ...current, x: current.x - 40 }))
+    if (event.key === "ArrowRight") setOffset((current) => ({ ...current, x: current.x + 40 }))
+    if (event.key === "ArrowUp") setOffset((current) => ({ ...current, y: current.y - 40 }))
+    if (event.key === "ArrowDown") setOffset((current) => ({ ...current, y: current.y + 40 }))
+  }
+
+  return (
+    <div className="relative size-full overflow-hidden bg-black" aria-label={`${label}高清查看器`}>
+      <div
+        ref={viewportRef}
+        tabIndex={0}
+        role="application"
+        aria-label="图片缩放拖动区域；滚轮缩放，按住拖动，双击复位"
+        onWheel={handleWheel}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        onDoubleClick={() => zoom === MIN_ZOOM ? changeZoom(2.5) : reset()}
+        onKeyDown={handleKeyDown}
+        className={`size-full select-none touch-none overflow-hidden outline-none ${dragging ? "cursor-grabbing" : "cursor-grab"}`}
+      >
+        <img
+          src={assetUrl(src)}
+          alt={alt}
+          draggable={false}
+          className="pointer-events-none size-full origin-center object-contain will-change-transform"
+          style={{ transform: `translate3d(${offset.x}px, ${offset.y}px, 0) scale(${zoom})` }}
+        />
+      </div>
+
+      <div className="absolute left-1/2 top-4 max-w-[70vw] -translate-x-1/2 truncate rounded-sm bg-black/72 px-3 py-1.5 text-sm text-white backdrop-blur">{label}</div>
+      <div className="absolute bottom-4 left-1/2 flex max-w-[calc(100%-1rem)] -translate-x-1/2 items-center gap-2 rounded-lg bg-black/78 p-2 text-white shadow-lg backdrop-blur">
+        <Button type="button" size="icon" variant="secondary" onClick={() => changeZoom(zoom / 1.25)} disabled={zoom <= MIN_ZOOM} aria-label="缩小图片"><Minus /></Button>
+        <input
+          type="range"
+          min={MIN_ZOOM * 100}
+          max={MAX_ZOOM * 100}
+          step="10"
+          value={Math.round(zoom * 100)}
+          onChange={(event) => changeZoom(Number(event.target.value) / 100)}
+          aria-label="图片缩放比例"
+          className="w-24 accent-white sm:w-40"
+        />
+        <span className="w-14 text-center text-sm tabular-nums">{Math.round(zoom * 100)}%</span>
+        <Button type="button" size="icon" variant="secondary" onClick={() => changeZoom(zoom * 1.25)} disabled={zoom >= MAX_ZOOM} aria-label="放大图片"><Plus /></Button>
+        <Button type="button" size="icon" variant="secondary" onClick={reset} aria-label="复位图片"><RotateCcw /></Button>
+      </div>
+      <p className="pointer-events-none absolute bottom-[4.75rem] left-1/2 hidden -translate-x-1/2 rounded-sm bg-black/62 px-2 py-1 text-xs text-white/80 sm:block">滚轮缩放 · 按住拖动 · 双击放大或复位</p>
+    </div>
+  )
+}
+
 function ZoomableMuseumImage({ src, alt, label, className = "" }: { src: string; alt: string; label: string; className?: string }) {
   return (
     <Dialog>
@@ -106,11 +233,10 @@ function ZoomableMuseumImage({ src, alt, label, className = "" }: { src: string;
           </span>
         </button>
       </DialogTrigger>
-      <DialogContent className="h-[94svh] w-[calc(100%-1rem)] max-w-[96vw] gap-0 overflow-hidden border-0 bg-black/95 p-3 text-white shadow-2xl sm:p-5" showCloseButton>
+      <DialogContent className="h-[96svh] w-[calc(100%-0.5rem)] max-w-[98vw] gap-0 overflow-hidden border-0 bg-black p-0 text-white shadow-2xl" showCloseButton>
         <DialogTitle className="sr-only">{label}</DialogTitle>
-        <DialogDescription className="sr-only">放大查看馆方开放图片</DialogDescription>
-        <MuseumImage src={src} alt={alt} className="size-full max-h-[calc(94svh-1.5rem)] bg-transparent" />
-        <span className="pointer-events-none absolute bottom-4 left-1/2 max-w-[80vw] -translate-x-1/2 truncate rounded-sm bg-black/70 px-3 py-1.5 text-sm text-white backdrop-blur">{label}</span>
+        <DialogDescription className="sr-only">可自由缩放和拖动的馆方开放图片</DialogDescription>
+        <PanZoomViewer src={src} alt={alt} label={label} />
       </DialogContent>
     </Dialog>
   )
